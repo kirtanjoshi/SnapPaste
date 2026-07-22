@@ -1,0 +1,21 @@
+# Rust build artifacts
+target/
+**/*.rs.bk
+desktop/app.log
+desktop/app_view.log
+desktop/settings.txt
+
+# Android build artifacts
+.gradle/
+**/build/
+local.properties
+Captures/
+*.apk
+
+# IDE & system configs
+.idea/
+.vscode/
+.agents/
+.gemini/
+.DS_Store
+Thumbs.db
