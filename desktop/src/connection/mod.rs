@@ -212,6 +212,9 @@ impl ConnectionRunner {
                 let (status, _) = self.adb.check_device();
                 match status {
                     DeviceStatus::Device => {
+                        log::info!("Device authorized. Performing auto-setup (granting permissions & starting service)...");
+                        self.adb.grant_required_permissions();
+                        self.adb.start_service();
                         let _ = self.state_manager.transition(ConnectionEvent::AdbAuthorized);
                     }
                     DeviceStatus::Unauthorized => {

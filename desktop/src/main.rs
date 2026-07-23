@@ -45,6 +45,25 @@ fn main() {
     log::info!("==========================================");
     log::info!("Starting SnapPaste Desktop utility...");
 
+    // Enforce single instance via named mutex
+    let mutex_name = windows::core::w!("Global\\SnapPasteSingleInstanceMutex");
+    let _mutex_handle = unsafe {
+        match windows::Win32::System::Threading::CreateMutexW(None, true, mutex_name) {
+            Ok(handle) => {
+                if windows::Win32::Foundation::GetLastError() == windows::Win32::Foundation::ERROR_ALREADY_EXISTS {
+                    log::warn!("Another instance of SnapPaste is already running. Exiting...");
+                    let _ = windows::Win32::Foundation::CloseHandle(handle);
+                    return;
+                }
+                Some(handle)
+            }
+            Err(e) => {
+                log::error!("Failed to create single-instance mutex: {}. Continuing anyway...", e);
+                None
+            }
+        }
+    };
+
     // 2. Load Settings
     let settings_service = SettingsService::new();
     let mut settings = settings_service.load();

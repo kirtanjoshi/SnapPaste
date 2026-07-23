@@ -39,15 +39,17 @@
             android:exported="true"
             android:foregroundServiceType="dataSync" />
 
-        <!-- BroadcastReceiver to start service on device startup -->
+        <!-- BroadcastReceiver to start/stop service on device boot or power connection/disconnection -->
         <receiver
             android:name="com.snappaste.app.service.BootReceiver"
             android:enabled="true"
-            android:exported="false">
+            android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
                 <action android:name="android.intent.action.QUICKBOOT_POWERON" />
                 <action android:name="com.htc.intent.action.QUICKBOOT_POWERON" />
+                <action android:name="android.intent.action.ACTION_POWER_CONNECTED" />
+                <action android:name="android.intent.action.ACTION_POWER_DISCONNECTED" />
             </intent-filter>
         </receiver>
 

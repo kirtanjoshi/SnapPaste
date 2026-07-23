@@ -53,6 +53,14 @@ class TcpClient(
 
     private var scope: CoroutineScope? = null
 
+    /** Callback triggered when the connection state transitions. */
+    var onStateChanged: ((ConnectionState) -> Unit)? = null
+
+    private fun transition(event: ConnectionEvent) {
+        val newState = connectionManager.transition(event)
+        onStateChanged?.invoke(newState)
+    }
+
     /**
      * Start the TCP client background connection loop.
      */
@@ -81,25 +89,25 @@ class TcpClient(
                 socket.soTimeout = 10000 // 10 seconds timeout
                 socket.connect(InetSocketAddress(host, port), 3000)
                 Log.i(TAG, "TCP connected to desktop server.")
-                connectionManager.transition(ConnectionEvent.TCP_CONNECTED)
+                transition(ConnectionEvent.TCP_CONNECTED)
 
                 val outputStream = socket.getOutputStream()
                 val inputStream = socket.getInputStream()
 
                 // Perform Handshake
                 if (performHandshake(outputStream)) {
-                    connectionManager.transition(ConnectionEvent.AUTH_SUCCESS)
-                    connectionManager.transition(ConnectionEvent.ENTER_IDLE)
+                    transition(ConnectionEvent.AUTH_SUCCESS)
+                    transition(ConnectionEvent.ENTER_IDLE)
                     
                     // Connected & Authenticated successfully. Run transmission loop.
                     runTransmissionLoop(socket, outputStream, inputStream)
                 } else {
                     Log.w(TAG, "Handshake failed.")
-                    connectionManager.transition(ConnectionEvent.AUTH_FAILED)
+                    transition(ConnectionEvent.AUTH_FAILED)
                 }
             } catch (e: Exception) {
                 Log.w(TAG, "Socket error / disconnect: ${e.message}")
-                connectionManager.transition(ConnectionEvent.DISCONNECT_OR_ERROR)
+                transition(ConnectionEvent.DISCONNECT_OR_ERROR)
             } finally {
                 isTransferring.set(false)
                 activeTransferJob?.cancel()
@@ -108,8 +116,8 @@ class TcpClient(
                 } catch (e: Exception) {
                     // Ignore close failures
                 }
-                Log.i(TAG, "Connection closed. Retrying in 2 seconds...")
-                delay(2000)
+                Log.i(TAG, "Connection closed. Retrying in 5 seconds...")
+                delay(5000)
             }
         }
     }
@@ -213,7 +221,7 @@ class TcpClient(
     }
 
     private suspend fun sendScreenshot(uri: Uri, out: OutputStream) {
-        connectionManager.transition(ConnectionEvent.START_SEND)
+        transition(ConnectionEvent.START_SEND)
         
         val imageId = nextImageId.getAndIncrement()
         Log.i(TAG, "Starting transmission of screenshot: URI=$uri, ImageID=$imageId")
@@ -285,7 +293,7 @@ class TcpClient(
             out.flush()
 
             Log.i(TAG, "Successfully completed transmission for ImageID=$imageId")
-            connectionManager.transition(ConnectionEvent.SEND_COMPLETE)
+            transition(ConnectionEvent.SEND_COMPLETE)
         }
     }
 
@@ -299,7 +307,7 @@ class TcpClient(
             out.write(encode(cancelPkt))
             out.flush()
             Log.i(TAG, "Sent CANCEL packet for previous transfer.")
-            connectionManager.transition(ConnectionEvent.SEND_COMPLETE)
+            transition(ConnectionEvent.SEND_COMPLETE)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to send CANCEL packet", e)
         }

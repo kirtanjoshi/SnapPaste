@@ -14,6 +14,7 @@ import android.os.HandlerThread
 import android.os.IBinder
 import android.util.Log
 import com.snappaste.app.network.TcpClient
+import com.snappaste.app.network.ConnectionState
 import com.snappaste.app.observer.ScreenshotObserver
 import com.snappaste.app.observer.ScreenshotQueue
 import com.snappaste.app.pairing.PairingManager
@@ -79,7 +80,12 @@ class SnapPasteService : Service() {
         Log.i(TAG, "Service created")
 
         pairingManager = PairingManager(applicationContext)
-        tcpClient = TcpClient(contentResolver, pairingManager)
+        tcpClient = TcpClient(contentResolver, pairingManager).apply {
+            onStateChanged = { state ->
+                val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                nm.notify(NOTIFICATION_ID, buildNotification(state))
+            }
+        }
         
         // Start TCP connection loop
         tcpClient.start(serviceScope)
@@ -144,10 +150,10 @@ class SnapPasteService : Service() {
      * On Android 14+ (API 34) we must specify the `foregroundServiceType`
      * parameter in [startForeground] to match the manifest declaration.
      */
-    private fun promoteToForeground() {
+    private fun promoteToForeground(state: ConnectionState = ConnectionState.DISCONNECTED) {
         createNotificationChannel()
 
-        val notification = buildNotification()
+        val notification = buildNotification(state)
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             // Android 14+: must specify foregroundServiceType at runtime.
@@ -176,7 +182,7 @@ class SnapPasteService : Service() {
         }
     }
 
-    private fun buildNotification(): Notification {
+    private fun buildNotification(state: ConnectionState = ConnectionState.DISCONNECTED): Notification {
         // Stop action PendingIntent
         val stopIntent = Intent(this, SnapPasteService::class.java).apply {
             action = ACTION_STOP
@@ -186,9 +192,17 @@ class SnapPasteService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
 
+        val statusText = when (state) {
+            ConnectionState.DISCONNECTED -> "Waiting for PC connection…"
+            ConnectionState.TCP_CONNECTED -> "Connecting to PC…"
+            ConnectionState.AUTHENTICATED -> "Authenticating…"
+            ConnectionState.IDLE -> "Active • Connected to PC"
+            ConnectionState.SENDING_IMAGE -> "Beaming screenshot…"
+        }
+
         return Notification.Builder(this, NOTIFICATION_CHANNEL_ID)
             .setContentTitle("SnapPaste")
-            .setContentText("Watching for screenshots…")
+            .setContentText(statusText)
             .setSmallIcon(android.R.drawable.ic_menu_camera)  // placeholder icon
             .setOngoing(true)
             .addAction(

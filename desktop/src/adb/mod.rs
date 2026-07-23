@@ -120,4 +120,68 @@ impl ADBManager {
         log::info!("Removing adb reverse on {}", local_arg);
         let _ = reverse_cmd.status();
     }
+
+    /// Automatically grants required storage and notification permissions to the SnapPaste Android app.
+    pub fn grant_required_permissions(&self) {
+        let permissions = [
+            "android.permission.READ_MEDIA_IMAGES",
+            "android.permission.READ_EXTERNAL_STORAGE",
+            "android.permission.POST_NOTIFICATIONS",
+        ];
+
+        for perm in &permissions {
+            let mut cmd = Command::new("adb");
+            cmd.creation_flags(CREATE_NO_WINDOW);
+            if let Some(ref serial) = self.current_device {
+                cmd.arg("-s").arg(serial);
+            }
+            cmd.arg("shell")
+               .arg("pm")
+               .arg("grant")
+               .arg("com.snappaste.app")
+               .arg(perm);
+
+            log::info!("Granting permission {} via ADB...", perm);
+            match cmd.status() {
+                Ok(status) => {
+                    if status.success() {
+                        log::info!("Successfully granted {}.", perm);
+                    } else {
+                        log::warn!("Failed to grant {} (app might not be installed yet or permission not defined).", perm);
+                    }
+                }
+                Err(e) => {
+                    log::error!("Error executing adb grant command for {}: {}", perm, e);
+                }
+            }
+        }
+    }
+
+    /// Automatically starts the SnapPaste foreground service on the device.
+    pub fn start_service(&self) {
+        let mut cmd = Command::new("adb");
+        cmd.creation_flags(CREATE_NO_WINDOW);
+        if let Some(ref serial) = self.current_device {
+            cmd.arg("-s").arg(serial);
+        }
+        cmd.arg("shell")
+           .arg("am")
+           .arg("start-foreground-service")
+           .arg("-n")
+           .arg("com.snappaste.app/com.snappaste.app.service.SnapPasteService");
+
+        log::info!("Starting SnapPaste foreground service via ADB...");
+        match cmd.status() {
+            Ok(status) => {
+                if status.success() {
+                    log::info!("Successfully started foreground service.");
+                } else {
+                    log::warn!("Failed to start foreground service (app might not be installed or service signature error).");
+                }
+            }
+            Err(e) => {
+                log::error!("Error executing adb start service command: {}", e);
+            }
+        }
+    }
 }
